@@ -1,5 +1,6 @@
-#include <bits/stdc++.h>
-using namespace std;
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
 
 struct Process {
     int id;        // process id
@@ -11,157 +12,143 @@ struct Process {
 };
 
 // Utility function to calculate averages
-void printResults(vector<Process> &procs, vector<int> &gantt) {
-    int n = procs.size();
+void printResults(struct Process procs[], int n, int gantt[], int gsize) {
     double totalWT = 0, totalTAT = 0;
-
-    for (auto &p : procs) {
-        p.tat = p.ct - p.at;
-        p.wt = p.tat - p.bt;
-        totalWT += p.wt;
-        totalTAT += p.tat;
+    for (int i = 0; i < n; i++) {
+        procs[i].tat = procs[i].ct - procs[i].at;
+        procs[i].wt = procs[i].tat - procs[i].bt;
+        totalWT += procs[i].wt;
+        totalTAT += procs[i].tat;
     }
 
     // Print Gantt chart
-    cout << "Gantt Chart : ";
-    for (int pid : gantt) {
-        cout << "P" << pid << " ";
+    printf("Gantt Chart : ");
+    for (int i = 0; i < gsize; i++) {
+        printf("P%d ", gantt[i]);
     }
-    cout << "\n";
+    printf("\n");
 
-    cout << "Average waiting time: " << totalWT / n << "\n";
-    cout << "Average turnaround time : " << totalTAT / n << "\n";
+    printf("Average waiting time: %.2lf\n", totalWT / n);
+    printf("Average turnaround time : %.2lf\n", totalTAT / n);
 }
 
 // First Come First Serve
-void FCFS(vector<Process> procs) {
-    sort(procs.begin(), procs.end(), [](auto &a, auto &b) {
-        return a.at < b.at;
-    });
+int cmp_at(const void *a, const void *b) {
+    struct Process *p1 = (struct Process *)a;
+    struct Process *p2 = (struct Process *)b;
+    return p1->at - p2->at;
+}
+
+void FCFS(struct Process procs[], int n) {
+    qsort(procs, n, sizeof(struct Process), cmp_at);
 
     int time = 0;
-    vector<int> gantt;
+    int gantt[100], gsize = 0;
 
-    for (auto &p : procs) {
-        time = max(time, p.at);  // wait if CPU idle
-        time += p.bt;
-        p.ct = time;
-        gantt.push_back(p.id);
+    for (int i = 0; i < n; i++) {
+        if (time < procs[i].at)
+            time = procs[i].at;
+        time += procs[i].bt;
+        procs[i].ct = time;
+        gantt[gsize++] = procs[i].id;
     }
 
-    printResults(procs, gantt);
+    printResults(procs, n, gantt, gsize);
 }
 
 // Shortest Job First Non-Preemptive
-void SJF_NP(vector<Process> procs) {
-    int n = procs.size();
+void SJF_NP(struct Process procs[], int n) {
     int time = 0, completed = 0;
-    vector<int> gantt;
-    vector<bool> done(n, false);
+    int gantt[100], gsize = 0;
+    int done[100] = {0};
 
     while (completed < n) {
-        int idx = -1;
-        int mn = INT_MAX;
-
-        // pick available shortest job
+        int idx = -1, mn = INT_MAX;
         for (int i = 0; i < n; i++) {
             if (!done[i] && procs[i].at <= time && procs[i].bt < mn) {
                 mn = procs[i].bt;
                 idx = i;
             }
         }
-
-        if (idx == -1) { // no process yet
+        if (idx == -1) {
             time++;
             continue;
         }
-
         time += procs[idx].bt;
         procs[idx].ct = time;
-        done[idx] = true;
-        gantt.push_back(procs[idx].id);
+        done[idx] = 1;
+        gantt[gsize++] = procs[idx].id;
         completed++;
     }
-
-    printResults(procs, gantt);
+    printResults(procs, n, gantt, gsize);
 }
 
 // Shortest Job First Preemptive (SRTF)
-void SJF_P(vector<Process> procs) {
-    int n = procs.size();
+void SJF_P(struct Process procs[], int n) {
     int completed = 0, time = 0;
-    vector<int> gantt;
-    vector<int> remBT(n);
-
-    for (int i = 0; i < n; i++) remBT[i] = procs[i].bt;
+    int gantt[1000], gsize = 0;
+    int remBT[100], i;
+    for (i = 0; i < n; i++) remBT[i] = procs[i].bt;
 
     while (completed < n) {
-        int idx = -1;
-        int mn = INT_MAX;
-
-        for (int i = 0; i < n; i++) {
+        int idx = -1, mn = INT_MAX;
+        for (i = 0; i < n; i++) {
             if (procs[i].at <= time && remBT[i] > 0 && remBT[i] < mn) {
                 mn = remBT[i];
                 idx = i;
             }
         }
-
-        if (idx == -1) { // CPU idle
+        if (idx == -1) {
             time++;
             continue;
         }
-
-        // Execute 1 unit
         remBT[idx]--;
-        gantt.push_back(procs[idx].id);
+        gantt[gsize++] = procs[idx].id;
         time++;
-
         if (remBT[idx] == 0) {
             procs[idx].ct = time;
             completed++;
         }
     }
-
     // compress Gantt chart (remove repeats)
-    vector<int> compact;
-    compact.push_back(gantt[0]);
-    for (int i = 1; i < gantt.size(); i++) {
+    int compact[100], csize = 0;
+    compact[csize++] = gantt[0];
+    for (i = 1; i < gsize; i++) {
         if (gantt[i] != gantt[i - 1])
-            compact.push_back(gantt[i]);
+            compact[csize++] = gantt[i];
     }
-
-    printResults(procs, compact);
+    printResults(procs, n, compact, csize);
 }
 
 // Main
 int main() {
-    int n;
-    cout << "Number of processes : ";
-    cin >> n;
+    int n, i;
+    printf("Number of processes : ");
+    scanf("%d", &n);
 
-    vector<Process> procs(n);
+    struct Process procs[100];
 
-    cout << "Burst time : ";
-    for (int i = 0; i < n; i++) {
-        cin >> procs[i].bt;
+    printf("Burst time : ");
+    for (i = 0; i < n; i++) {
+        scanf("%d", &procs[i].bt);
         procs[i].id = i;
     }
 
-    cout << "Arrival time : ";
-    for (int i = 0; i < n; i++) {
-        cin >> procs[i].at;
+    printf("Arrival time : ");
+    for (i = 0; i < n; i++) {
+        scanf("%d", &procs[i].at);
     }
 
     int choice;
-    cout << "\nChoose Scheduling Policy:\n";
-    cout << "1. FCFS\n2. SJF Non-Preemptive\n3. SJF Preemptive\n";
-    cin >> choice;
+    printf("\nChoose Scheduling Policy:\n");
+    printf("1. FCFS\n2. SJF Non-Preemptive\n3. SJF Preemptive\n");
+    scanf("%d", &choice);
 
     switch (choice) {
-        case 1: FCFS(procs); break;
-        case 2: SJF_NP(procs); break;
-        case 3: SJF_P(procs); break;
-        default: cout << "Invalid choice!\n";
+        case 1: FCFS(procs, n); break;
+        case 2: SJF_NP(procs, n); break;
+        case 3: SJF_P(procs, n); break;
+        default: printf("Invalid choice!\n");
     }
     return 0;
 }
